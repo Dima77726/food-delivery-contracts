@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!--
+        Контракты платформы: то, на что завязаны все сервисы сразу. Живут отдельным
+        репозиторием и выпускаются своим номером версии — не сервисным.
+
+          libs/event-contracts — формы сообщений Kafka и имена топиков;
+          libs/grpc-contracts  — .proto и сгенерированные из них стабы gRPC;
+          client               — Java-клиент к REST API, генерируемый из спецификации
+                                 openapi/food-delivery-api.yaml. Спецификация едет внутри
+                                 jar клиента: сервисы, которые генерируют из неё свои
+                                 контроллеры, распаковывают её оттуда, а не копируют к себе.
+
+        Совместимое изменение (новое поле, новый метод) поднимает минорную версию,
+        несовместимое — мажорную и новый пакет .proto (catalog.v2); старый живёт рядом,
+        пока им пользуются. Публикация — по тегу contracts-vX.Y.Z (.github/workflows).
+
+        Библиотеки контрактов (event-contracts, grpc-contracts) намеренно без родителя:
+        потребитель не должен тянуть за ними чужой родительский pom. Родитель нужен
+        только клиенту — ради BOM Spring Boot для его зависимостей.
+    -->
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>4.0.5</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>com.dima</groupId>
+    <artifactId>food-delivery-contracts</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+    <name>food-delivery-contracts</name>
+    <description>Контракты платформы доставки еды: события Kafka, gRPC и REST</description>
+
+    <modules>
+        <module>libs/event-contracts</module>
+        <module>libs/grpc-contracts</module>
+        <module>client</module>
+    </modules>
+
+    <properties>
+        <java.version>21</java.version>
+        <openapi-generator.version>7.24.0</openapi-generator.version>
+        <!--
+            Путь к спецификации. project.parent.basedir, а не project.basedir: свойство
+            наследуется клиентом, и project.basedir раскрылся бы в каталог клиента.
+            Не maven.multiModuleProjectDirectory: его выставляет скрипт-обёртка, а голый mvn
+            оставляет неопределённым.
+        -->
+        <openapi.spec>${project.parent.basedir}/openapi/food-delivery-api.yaml</openapi.spec>
+    </properties>
+
+    <!-- Клиент наследует публикацию отсюда; у библиотек контрактов она своя, в их pom. -->
+    <distributionManagement>
+        <repository>
+            <id>github</id>
+            <name>GitHub Packages</name>
+            <url>https://maven.pkg.github.com/Dima77726/food-delivery-contracts</url>
+        </repository>
+        <snapshotRepository>
+            <id>github</id>
+            <name>GitHub Packages</name>
+            <url>https://maven.pkg.github.com/Dima77726/food-delivery-contracts</url>
+        </snapshotRepository>
+    </distributionManagement>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.openapitools</groupId>
+                    <artifactId>openapi-generator-maven-plugin</artifactId>
+                    <version>${openapi-generator.version}</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+
+</project>

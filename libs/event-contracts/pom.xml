@@ -39,12 +39,12 @@
         <repository>
             <id>github</id>
             <name>GitHub Packages</name>
-            <url>https://maven.pkg.github.com/Dima77726/food-delivery-platform</url>
+            <url>https://maven.pkg.github.com/Dima77726/food-delivery-contracts</url>
         </repository>
         <snapshotRepository>
             <id>github</id>
             <name>GitHub Packages</name>
-            <url>https://maven.pkg.github.com/Dima77726/food-delivery-platform</url>
+            <url>https://maven.pkg.github.com/Dima77726/food-delivery-contracts</url>
         </snapshotRepository>
     </distributionManagement>
 

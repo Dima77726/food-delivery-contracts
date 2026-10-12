@@ -5,8 +5,8 @@
 
     <parent>
         <groupId>com.dima</groupId>
-        <artifactId>food-delivery-platform</artifactId>
-        <version>0.0.1-SNAPSHOT</version>
+        <artifactId>food-delivery-contracts</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>food-delivery-client</artifactId>
@@ -75,6 +75,18 @@
     </dependencies>
 
     <build>
+        <!--
+            Спецификация едет внутри jar: сервисы, которые генерируют из неё контроллеры
+            (catalog, insights, tracking), распаковывают её отсюда и берут ту самую версию
+            контракта, под которую собран клиент. Копировать файл в каждый репозиторий нельзя —
+            копии разошлись бы уже на второй правке.
+        -->
+        <resources>
+            <resource>
+                <directory>../openapi</directory>
+                <targetPath>openapi</targetPath>
+            </resource>
+        </resources>
         <plugins>
             <plugin>
                 <groupId>org.openapitools</groupId>
