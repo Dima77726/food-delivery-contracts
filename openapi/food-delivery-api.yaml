@@ -387,6 +387,61 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
 
+
+  /api/v1/restaurants/{restaurantId}/menu/items/{itemId}/image:
+    parameters:
+      - $ref: '#/components/parameters/RestaurantId'
+      - $ref: '#/components/parameters/ItemId'
+    put:
+      tags: [MenuManagement]
+      operationId: uploadMenuItemImage
+      summary: >-
+        Загрузить или заменить фото блюда. Тип определяется по содержимому файла, а не по
+        имени и заголовку: принимаются JPEG, PNG и WebP до 2 МБ. Прежнее фото удаляется.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Изображение блюда
+      responses:
+        '200':
+          description: Фото сохранено; в ответе блюдо с новым адресом картинки
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManagedMenuItem'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+    delete:
+      tags: [MenuManagement]
+      operationId: deleteMenuItemImage
+      summary: Убрать фото блюда. Повторный вызов — успех, а не ошибка.
+      responses:
+        '204':
+          description: У блюда нет фото
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
   "/api/v1/customers/{customerId}/orders/{orderId}/review":
     "post":
       "tags":
@@ -1049,6 +1104,18 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ApiError'
+    PayloadTooLarge:
+      description: Файл больше допустимого размера
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    UnsupportedMediaType:
+      description: Файл не является поддерживаемым изображением
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
 
   schemas:
 
@@ -1136,6 +1203,12 @@ components:
         available:
           type: boolean
           description: Есть ли блюдо в наличии прямо сейчас
+        imageUrl:
+          type: string
+          nullable: true
+          description: >-
+            Адрес фото блюда; пусто, если фото не загружено. Адрес публичный: фото меню — не
+            персональные данные, и клиенту не нужен ни токен, ни подпись, чтобы показать картинку.
 
     MenuCategory:
       type: object
@@ -1191,6 +1264,10 @@ components:
         archived:
           type: boolean
           description: Убрано из меню навсегда; необратимо
+        imageUrl:
+          type: string
+          nullable: true
+          description: Адрес фото блюда; пусто, если фото не загружено
 
     ManagedMenuCategory:
       type: object
