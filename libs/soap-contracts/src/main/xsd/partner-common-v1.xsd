@@ -64,7 +64,7 @@
             <xs:enumeration value="READY_FOR_DELIVERY"/>
             <xs:enumeration value="IN_DELIVERY"/>
             <xs:enumeration value="DELIVERED"/>
-            <xs:enumeration value="CANCELLED"/>
+            <xs:enumeration value="CANCELED"/>
         </xs:restriction>
     </xs:simpleType>
 
