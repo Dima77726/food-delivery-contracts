@@ -6,6 +6,7 @@
 |---|---|
 | `com.dima:event-contracts` | формы сообщений Kafka и имена топиков (Java-записи, без зависимостей) |
 | `com.dima:grpc-contracts` | `.proto` и сгенерированные стабы gRPC |
+| `com.dima:soap-contracts` | XSD партнёрского SOAP API (`urn:fooddelivery:partner:v1`) и JAXB-классы из него |
 | `com.dima:food-delivery-client` | Java-клиент к REST API; внутри jar — сама спецификация `openapi/food-delivery-api.yaml` |
 
 Публикуются в GitHub Packages этого репозитория по тегу `vX.Y.Z`. Версия контрактов своя,

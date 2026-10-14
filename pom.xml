@@ -9,6 +9,7 @@
 
           libs/event-contracts — формы сообщений Kafka и имена топиков;
           libs/grpc-contracts  — .proto и сгенерированные из них стабы gRPC;
+          libs/soap-contracts  — XSD партнёрского SOAP API и JAXB-классы из него;
           client               — Java-клиент к REST API, генерируемый из спецификации
                                  openapi/food-delivery-api.yaml. Спецификация едет внутри
                                  jar клиента: сервисы, которые генерируют из неё свои
@@ -39,6 +40,7 @@
     <modules>
         <module>libs/event-contracts</module>
         <module>libs/grpc-contracts</module>
+        <module>libs/soap-contracts</module>
         <module>client</module>
     </modules>
 
