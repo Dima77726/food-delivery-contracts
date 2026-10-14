@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Операции заказов: ListOpenOrders, GetOrderStatus, AcceptOrder. Обслуживает order-service.
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:tns="urn:fooddelivery:partner:v1"
+           targetNamespace="urn:fooddelivery:partner:v1"
+           elementFormDefault="qualified">
+
+    <xs:include schemaLocation="partner-common-v1.xsd"/>
+
+    <!-- ===================== Заказы ===================== -->
+
+    <xs:element name="ListOpenOrdersRequest">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="restaurantId" type="tns:Id"/>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+
+    <xs:element name="ListOpenOrdersResponse">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="order" type="tns:Order" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+
+    <xs:element name="GetOrderStatusRequest">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="restaurantId" type="tns:Id"/>
+                <xs:element name="orderId" type="tns:Id"/>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+
+    <xs:element name="GetOrderStatusResponse">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="order" type="tns:Order"/>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+
+    <xs:element name="AcceptOrderRequest">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="restaurantId" type="tns:Id"/>
+                <xs:element name="orderId" type="tns:Id"/>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+
+    <xs:element name="AcceptOrderResponse">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="order" type="tns:Order"/>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+
+</xs:schema>

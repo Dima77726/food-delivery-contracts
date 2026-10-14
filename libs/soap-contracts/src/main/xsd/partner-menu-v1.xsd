@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Операции каталога: GetMenu, SetItemAvailability. Обслуживает catalog-service.
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:tns="urn:fooddelivery:partner:v1"
+           targetNamespace="urn:fooddelivery:partner:v1"
+           elementFormDefault="qualified">
+
+    <xs:include schemaLocation="partner-common-v1.xsd"/>
+
+    <!-- ===================== Каталог ===================== -->
+
+    <xs:element name="GetMenuRequest">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="restaurantId" type="tns:Id"/>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+
+    <xs:element name="GetMenuResponse">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="category" type="tns:MenuCategory" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+
+    <xs:element name="SetItemAvailabilityRequest">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="restaurantId" type="tns:Id"/>
+                <xs:element name="itemId" type="tns:Id"/>
+                <xs:element name="available" type="xs:boolean"/>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+
+    <xs:element name="SetItemAvailabilityResponse">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="item" type="tns:MenuItem"/>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+
+</xs:schema>

@@ -26,11 +26,13 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  */
 class PartnerSchemaTest {
 
-    private static final URL XSD = PartnerSchemaTest.class.getResource("/soap/partner-v1.xsd");
+    private static final URL MENU_XSD = PartnerSchemaTest.class.getResource("/soap/partner-menu-v1.xsd");
+    private static final URL ORDER_XSD = PartnerSchemaTest.class.getResource("/soap/partner-order-v1.xsd");
 
     @Test
     void shouldShipSchemaInsideTheJar() {
-        assertNotNull(XSD, "схема должна лежать в ресурсах под soap/partner-v1.xsd");
+        assertNotNull(MENU_XSD, "схема каталога должна лежать в ресурсах под soap/");
+        assertNotNull(ORDER_XSD, "схема заказов должна лежать в ресурсах под soap/");
     }
 
     @Test
@@ -47,10 +49,10 @@ class PartnerSchemaTest {
         category.getItem().add(item);
         response.getCategory().add(category);
 
-        String xml = marshal(response);
+        String xml = marshal(response, MENU_XSD);
 
         // Если бы классы расходились со схемой, разбор с валидацией упал бы здесь.
-        GetMenuResponse parsed = unmarshal(xml, GetMenuResponse.class);
+        GetMenuResponse parsed = unmarshal(xml, GetMenuResponse.class, MENU_XSD);
         assertEquals("Борщ", parsed.getCategory().get(0).getItem().get(0).getName());
         assertEquals(new BigDecimal("350.00"), parsed.getCategory().get(0).getItem().get(0).getPrice());
     }
@@ -65,16 +67,16 @@ class PartnerSchemaTest {
         GetOrderStatusResponse response = new GetOrderStatusResponse();
         response.setOrder(order);
 
-        String xml = marshal(response);
+        String xml = marshal(response, ORDER_XSD);
 
-        assertEquals(OrderStatus.PAID, unmarshal(xml, GetOrderStatusResponse.class).getOrder().getStatus());
+        assertEquals(OrderStatus.PAID, unmarshal(xml, GetOrderStatusResponse.class, ORDER_XSD).getOrder().getStatus());
     }
 
     @Test
     void shouldRejectNonPositiveId() {
         String xml = "<GetMenuRequest xmlns=\"urn:fooddelivery:partner:v1\"><restaurantId>0</restaurantId></GetMenuRequest>";
 
-        assertThrows(UnmarshalException.class, () -> unmarshal(xml, GetMenuRequest.class));
+        assertThrows(UnmarshalException.class, () -> unmarshal(xml, GetMenuRequest.class, MENU_XSD));
     }
 
     @Test
@@ -83,7 +85,7 @@ class PartnerSchemaTest {
                 + "<status>TELEPORTED</status><totalAmount>1.00</totalAmount>"
                 + "<createdAt>2026-10-14T01:02:03Z</createdAt></order></GetOrderStatusResponse>";
 
-        assertThrows(UnmarshalException.class, () -> unmarshal(xml, GetOrderStatusResponse.class));
+        assertThrows(UnmarshalException.class, () -> unmarshal(xml, GetOrderStatusResponse.class, ORDER_XSD));
     }
 
     @Test
@@ -91,25 +93,26 @@ class PartnerSchemaTest {
         String xml = "<SetItemAvailabilityResponse xmlns=\"urn:fooddelivery:partner:v1\"><item><id>1</id><name>x</name>"
                 + "<price>1.005</price><available>true</available></item></SetItemAvailabilityResponse>";
 
-        assertThrows(UnmarshalException.class, () -> unmarshal(xml, SetItemAvailabilityResponse.class));
+        assertThrows(UnmarshalException.class, () -> unmarshal(xml, SetItemAvailabilityResponse.class, MENU_XSD));
     }
 
-    private static Schema schema() throws Exception {
-        return SchemaFactory.newInstance(XMLConstants.W3C_XML_SCHEMA_NS_URI).newSchema(XSD);
+    /** Схема одного сервиса: общая часть подключена xs:include, схемы двух сервисов вместе не грузят. */
+    private static Schema schema(URL xsd) throws Exception {
+        return SchemaFactory.newInstance(XMLConstants.W3C_XML_SCHEMA_NS_URI).newSchema(xsd);
     }
 
-    private static String marshal(Object element) throws Exception {
+    private static String marshal(Object element, URL xsd) throws Exception {
         Marshaller marshaller = JAXBContext.newInstance(ObjectFactory.class).createMarshaller();
-        marshaller.setSchema(schema());
+        marshaller.setSchema(schema(xsd));
         StringWriter out = new StringWriter();
         marshaller.marshal(element, out);
 
         return out.toString();
     }
 
-    private static <T> T unmarshal(String xml, Class<T> type) throws Exception {
+    private static <T> T unmarshal(String xml, Class<T> type, URL xsd) throws Exception {
         Unmarshaller unmarshaller = JAXBContext.newInstance(ObjectFactory.class).createUnmarshaller();
-        unmarshaller.setSchema(schema());
+        unmarshaller.setSchema(schema(xsd));
 
         return unmarshaller.unmarshal(new StreamSource(new StringReader(xml)), type).getValue();
     }
