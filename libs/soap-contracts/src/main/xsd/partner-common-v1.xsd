@@ -1,22 +1,23 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-    SOAP-контракт для партнёров: касс и учётных систем ресторанов (POS), которым REST неудобен.
-    Контракт первичен (contract-first): отсюда генерируются JAXB-классы, по нему же Spring WS
-    строит WSDL и проверяет входящие сообщения.
+    SOAP-контракт партнёрского API (касс и учётных систем ресторанов), общая часть: типы и ошибка.
+    Контракт первичен (contract-first): отсюда генерируются JAXB-классы, по нему Spring WS строит
+    WSDL и проверяет входящие сообщения.
 
-    Совместимость: новое необязательное поле или новая операция — минорная версия контрактов.
-    Несовместимое изменение — новое пространство имён (urn:fooddelivery:partner:v2), а v1
+    Один XSD на сервис, а не один на всё: WSDL строится по всем парам Request/Response схемы,
+    и каталог рекламировал бы операции заказов, которых у него нет. Пространство имён общее,
+    поэтому классы Java лежат в одном пакете.
+
+    Совместимость: новое необязательное поле или новая операция - минорная версия контрактов.
+    Несовместимое изменение - новое пространство имён (urn:fooddelivery:partner:v2), а v1
     живёт рядом, пока им пользуются.
 
-    Операции каталога: GetMenu, SetItemAvailability.
-    Операции заказов:  ListOpenOrders, GetOrderStatus, AcceptOrder.
-    Ошибки — SOAP Fault с деталью PartnerFault: код для программы, текст для человека.
+    Ошибки - SOAP Fault с деталью PartnerFault: код для программы, текст для человека.
 -->
 <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
            xmlns:tns="urn:fooddelivery:partner:v1"
            targetNamespace="urn:fooddelivery:partner:v1"
            elementFormDefault="qualified">
-
     <!-- ===================== Общие типы ===================== -->
 
     <xs:simpleType name="Id">
@@ -75,94 +76,6 @@
             <xs:element name="createdAt" type="xs:dateTime"/>
         </xs:sequence>
     </xs:complexType>
-
-    <!-- ===================== Каталог ===================== -->
-
-    <xs:element name="GetMenuRequest">
-        <xs:complexType>
-            <xs:sequence>
-                <xs:element name="restaurantId" type="tns:Id"/>
-            </xs:sequence>
-        </xs:complexType>
-    </xs:element>
-
-    <xs:element name="GetMenuResponse">
-        <xs:complexType>
-            <xs:sequence>
-                <xs:element name="category" type="tns:MenuCategory" minOccurs="0" maxOccurs="unbounded"/>
-            </xs:sequence>
-        </xs:complexType>
-    </xs:element>
-
-    <xs:element name="SetItemAvailabilityRequest">
-        <xs:complexType>
-            <xs:sequence>
-                <xs:element name="restaurantId" type="tns:Id"/>
-                <xs:element name="itemId" type="tns:Id"/>
-                <xs:element name="available" type="xs:boolean"/>
-            </xs:sequence>
-        </xs:complexType>
-    </xs:element>
-
-    <xs:element name="SetItemAvailabilityResponse">
-        <xs:complexType>
-            <xs:sequence>
-                <xs:element name="item" type="tns:MenuItem"/>
-            </xs:sequence>
-        </xs:complexType>
-    </xs:element>
-
-    <!-- ===================== Заказы ===================== -->
-
-    <xs:element name="ListOpenOrdersRequest">
-        <xs:complexType>
-            <xs:sequence>
-                <xs:element name="restaurantId" type="tns:Id"/>
-            </xs:sequence>
-        </xs:complexType>
-    </xs:element>
-
-    <xs:element name="ListOpenOrdersResponse">
-        <xs:complexType>
-            <xs:sequence>
-                <xs:element name="order" type="tns:Order" minOccurs="0" maxOccurs="unbounded"/>
-            </xs:sequence>
-        </xs:complexType>
-    </xs:element>
-
-    <xs:element name="GetOrderStatusRequest">
-        <xs:complexType>
-            <xs:sequence>
-                <xs:element name="restaurantId" type="tns:Id"/>
-                <xs:element name="orderId" type="tns:Id"/>
-            </xs:sequence>
-        </xs:complexType>
-    </xs:element>
-
-    <xs:element name="GetOrderStatusResponse">
-        <xs:complexType>
-            <xs:sequence>
-                <xs:element name="order" type="tns:Order"/>
-            </xs:sequence>
-        </xs:complexType>
-    </xs:element>
-
-    <xs:element name="AcceptOrderRequest">
-        <xs:complexType>
-            <xs:sequence>
-                <xs:element name="restaurantId" type="tns:Id"/>
-                <xs:element name="orderId" type="tns:Id"/>
-            </xs:sequence>
-        </xs:complexType>
-    </xs:element>
-
-    <xs:element name="AcceptOrderResponse">
-        <xs:complexType>
-            <xs:sequence>
-                <xs:element name="order" type="tns:Order"/>
-            </xs:sequence>
-        </xs:complexType>
-    </xs:element>
 
     <!-- ===================== Ошибки ===================== -->
 
