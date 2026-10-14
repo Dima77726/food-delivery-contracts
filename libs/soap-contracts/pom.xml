@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- Без родителя платформы, как и остальные библиотеки контрактов. -->
+    <groupId>com.dima</groupId>
+    <artifactId>soap-contracts</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <name>soap-contracts</name>
+    <description>SOAP-контракт партнёрского API: XSD и сгенерированные из него JAXB-классы</description>
+
+    <properties>
+        <maven.compiler.release>21</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <jakarta-xml-bind.version>4.0.2</jakarta-xml-bind.version>
+        <jaxb-runtime.version>4.0.5</jaxb-runtime.version>
+        <jaxb-maven-plugin.version>4.0.8</jaxb-maven-plugin.version>
+        <junit.version>5.12.2</junit.version>
+    </properties>
+
+    <dependencies>
+        <!--
+            Только аннотации JAXB, и только как provided: контракт не навязывает потребителю
+            рантайм — тот приносит свой со стартером веб-сервисов Spring.
+        -->
+        <dependency>
+            <groupId>jakarta.xml.bind</groupId>
+            <artifactId>jakarta.xml.bind-api</artifactId>
+            <version>${jakarta-xml-bind.version}</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.glassfish.jaxb</groupId>
+            <artifactId>jaxb-runtime</artifactId>
+            <version>${jaxb-runtime.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${junit.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <distributionManagement>
+        <repository>
+            <id>github</id>
+            <name>GitHub Packages</name>
+            <url>https://maven.pkg.github.com/Dima77726/food-delivery-contracts</url>
+        </repository>
+        <snapshotRepository>
+            <id>github</id>
+            <name>GitHub Packages</name>
+            <url>https://maven.pkg.github.com/Dima77726/food-delivery-contracts</url>
+        </snapshotRepository>
+    </distributionManagement>
+
+    <build>
+        <resources>
+            <!-- Сама схема едет внутри jar: по ней сервисы строят WSDL и проверяют сообщения. -->
+            <resource>
+                <directory>src/main/xsd</directory>
+                <targetPath>soap</targetPath>
+            </resource>
+        </resources>
+        <plugins>
+            <plugin>
+                <groupId>org.jvnet.jaxb</groupId>
+                <artifactId>jaxb-maven-plugin</artifactId>
+                <version>${jaxb-maven-plugin.version}</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>generate</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <schemaDirectory>src/main/xsd</schemaDirectory>
+                    <schemaIncludes>
+                        <include>*.xsd</include>
+                    </schemaIncludes>
+                    <generatePackage>com.dima.fooddelivery.soap.partner.v1</generatePackage>
+                    <!-- Каждый запуск пересоздаёт классы: устаревших файлов в target не остаётся. -->
+                    <forceRegenerate>true</forceRegenerate>
+                    <episode>false</episode>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
