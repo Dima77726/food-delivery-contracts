@@ -28,6 +28,28 @@ service OrderQueryService {
 
   // Доставка по её идентификатору. Нет такой доставки — NOT_FOUND.
   rpc GetDelivery(GetDeliveryRequest) returns (DeliveryView);
+
+  // Поток событий заказа (server streaming): сначала история после after_event_id, потом новые события
+  // по мере появления. Поток закрывается сервером, когда заказ дошёл до финального статуса (OK), или
+  // по дедлайну клиента. Переподключение с after_event_id = последнему полученному продолжает с места
+  // обрыва — так же, как Last-Event-ID у SSE. Нет такого заказа — NOT_FOUND.
+  rpc WatchOrder(WatchOrderRequest) returns (stream OrderEventView);
+}
+
+message WatchOrderRequest {
+  int64 order_id = 1;
+  // 0 — с начала истории.
+  int64 after_event_id = 2;
+}
+
+message OrderEventView {
+  int64 event_id = 1;
+  int64 order_id = 2;
+  string event_type = 3;
+  string description = 4;
+  // Статус заказа на момент отправки этого события.
+  string status = 5;
+  string created_at = 6;
 }
 
 message GetOrderRequest {
