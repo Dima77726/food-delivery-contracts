@@ -29,3 +29,10 @@ jobs:
       # Сборка включает генерацию стабов gRPC и клиента REST из спецификации: если контракт
       # перестал генерироваться, это видно здесь, а не в сервисе, который его подключил.
       - run: ./mvnw -B --no-transfer-progress verify
+
+      # AsyncAPI-документ проверяется официальным валидатором: синтаксис 3.0, ссылки $ref, схемы сообщений.
+      # Сверку имён топиков с кодом делает ContractsAsyncApiTest в сборке выше.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npx --yes @asyncapi/cli@3.2.0 validate asyncapi/food-delivery.asyncapi.yaml

@@ -1,0 +1,478 @@
+asyncapi: 3.0.0
+info:
+  title: Food Delivery — асинхронные контракты
+  version: 1.4.1
+  description: |
+    Все асинхронные каналы платформы в одном месте: что, куда, в каком формате и кто пишет/читает.
+    OpenAPI (openapi/food-delivery-api.yaml) описывает запрос-ответ; этот документ — сообщения.
+
+    * Kafka — интеграционные события между сервисами (outbox → топик) и CDC-поток Debezium.
+    * RabbitMQ — рабочие очереди уведомлений и вебхуков, широковещательный толчок долгим запросам.
+    * MQTT (плагин RabbitMQ) — точки GPS с устройств курьеров.
+    * WebSocket/STOMP (ретранслятор в RabbitMQ) — живой трек и чат заказа для браузеров.
+    * HTTP-вебхуки — события заказов ресторанам-партнёрам (Standard Webhooks).
+
+    Правила эволюции: поля только добавляются; обязательное поле не становится необязательным;
+    несовместимое изменение — новый schemaVersion и новый тип события. Формы Kafka-событий в Java —
+    модуль event-contracts; ContractsAsyncApiTest сверяет имена топиков с этим документом.
+  contact:
+    name: Food Delivery Platform
+    url: https://github.com/Dima77726/food-delivery-platform
+  tags:
+    - name: kafka
+    - name: rabbitmq
+    - name: mqtt
+    - name: websocket
+    - name: webhook
+    - name: cdc
+
+defaultContentType: application/json
+
+servers:
+  kafka:
+    host: kafka:9092
+    protocol: kafka
+    description: Kafka в сети compose (KRaft, один брокер).
+  rabbitmq:
+    host: rabbitmq:5672
+    protocol: amqp
+    description: RabbitMQ — рабочие очереди уведомлений и вебхуков.
+  mqtt:
+    host: localhost:1883
+    protocol: mqtt
+    description: MQTT-плагин RabbitMQ. Логин — id курьера, пароль — его access-токен (HTTP-бэкенд аутентификации).
+  mqttWebsocket:
+    host: localhost:8070
+    pathname: /mqtt
+    protocol: ws
+    description: MQTT поверх WebSocket через nginx веб-интерфейса.
+  stomp:
+    host: localhost:8080
+    pathname: /ws/tracking
+    protocol: ws
+    description: STOMP поверх WebSocket через шлюз; токен — заголовок Authorization кадра CONNECT.
+
+channels:
+  orderEvents:
+    address: food-delivery.order-events
+    title: События заказа
+    description: Каждая смена статуса заказа. Ключ — orderId (порядок в пределах заказа). Пишет order-service через outbox.
+    servers:
+      - $ref: '#/servers/kafka'
+    messages:
+      orderIntegrationEvent:
+        $ref: '#/components/messages/OrderIntegrationEvent'
+
+  paymentCommands:
+    address: food-delivery.payment-commands
+    title: Команды платежам (сага)
+    servers:
+      - $ref: '#/servers/kafka'
+    messages:
+      paymentCommand:
+        $ref: '#/components/messages/PaymentCommand'
+
+  paymentEvents:
+    address: food-delivery.payment-events
+    title: Исходы платежей (сага)
+    servers:
+      - $ref: '#/servers/kafka'
+    messages:
+      paymentEvent:
+        $ref: '#/components/messages/PaymentEvent'
+
+  auditEvents:
+    address: food-delivery.audit-events
+    title: Сводный журнал аудита
+    servers:
+      - $ref: '#/servers/kafka'
+    messages:
+      auditEvent:
+        $ref: '#/components/messages/AuditEvent'
+
+  cdcCustomerOrder:
+    address: cdc.public.customer_order
+    title: CDC — строки таблицы customer_order
+    description: |
+      Debezium Server (профиль cdc) из WAL базы заказов; после ExtractNewRecordState — плоское новое состояние
+      строки плюс __op (c — вставка, u — изменение, d — удаление, r — снимок) и __source_ts_ms. Читает ClickHouse
+      (движок Kafka → order_status_history). В отличие от orderEvents это не контракт сервиса, а его схема хранения:
+      меняется вместе с таблицей.
+    servers:
+      - $ref: '#/servers/kafka'
+    messages:
+      customerOrderRow:
+        $ref: '#/components/messages/CdcCustomerOrderRow'
+
+  cdcDelivery:
+    address: cdc.public.delivery
+    title: CDC — строки таблицы delivery
+    servers:
+      - $ref: '#/servers/kafka'
+    messages:
+      deliveryRow:
+        $ref: '#/components/messages/CdcDeliveryRow'
+
+  notificationTasks:
+    address: notifications.dispatch
+    title: Задачи рассылки уведомлений
+    description: Direct-обмен; ключ — канал (email, sms, push, telegram), очередь на канал, повторы через TTL-очереди *.retry.
+    servers:
+      - $ref: '#/servers/rabbitmq'
+    messages:
+      notificationTask:
+        $ref: '#/components/messages/IdTask'
+
+  notificationsLive:
+    address: notifications.live
+    title: Толчок долгим запросам ленты уведомлений
+    description: Fanout; у каждого экземпляра notification-service своя анонимная очередь. Тело — id получателя.
+    servers:
+      - $ref: '#/servers/rabbitmq'
+    messages:
+      nudge:
+        $ref: '#/components/messages/RecipientNudge'
+
+  webhookDeliveries:
+    address: webhooks.dispatch
+    title: Доставки исходящих вебхуков
+    description: Direct, ключ deliver → webhooks.deliveries; лестница повторов webhooks.retry.PT10S … PT2H (TTL → обратно).
+    servers:
+      - $ref: '#/servers/rabbitmq'
+    messages:
+      deliveryTask:
+        $ref: '#/components/messages/IdTask'
+
+  courierPosition:
+    address: couriers/{courierId}/deliveries/{deliveryId}/position
+    title: Точка GPS курьера
+    description: Публикует только сам курьер (брокер проверяет id в топике). Плагин переводит в amq.topic, ключ couriers.42.deliveries.7.position.
+    parameters:
+      courierId:
+        description: Идентификатор курьера — совпадает с логином MQTT.
+      deliveryId:
+        description: Доставка в статусе PICKED_UP.
+    servers:
+      - $ref: '#/servers/mqtt'
+      - $ref: '#/servers/mqttWebsocket'
+    messages:
+      position:
+        $ref: '#/components/messages/CourierPosition'
+
+  orderTrack:
+    address: /topic/order.{orderId}.track
+    title: Живой трек заказа
+    parameters:
+      orderId:
+        description: Заказ клиента.
+    servers:
+      - $ref: '#/servers/stomp'
+    messages:
+      trackPoint:
+        $ref: '#/components/messages/TrackPoint'
+
+  orderChat:
+    address: /topic/order.{orderId}.chat
+    title: Чат заказа
+    parameters:
+      orderId:
+        description: Заказ; подписаться могут клиент, курьер этой доставки и поддержка.
+    servers:
+      - $ref: '#/servers/stomp'
+    messages:
+      chatEvent:
+        $ref: '#/components/messages/ChatEvent'
+
+  orderChatSignals:
+    address: /app/order.{orderId}.chat.{signal}
+    title: Сигналы чата от клиента
+    parameters:
+      orderId:
+        description: Заказ.
+      signal:
+        enum: [typing, read]
+        description: typing — «печатаю»; read — «прочитал до сообщения upTo».
+    servers:
+      - $ref: '#/servers/stomp'
+    messages:
+      chatSignal:
+        $ref: '#/components/messages/ChatSignal'
+
+  restaurantWebhook:
+    address: '{subscriptionUrl}'
+    title: Исходящий вебхук ресторану
+    description: |
+      POST на адрес подписки (только https и публичные адреса). Заголовки Standard Webhooks: webhook-id (одинаков во
+      всех попытках — ключ дедупликации у получателя), webhook-timestamp, webhook-signature (v1,<HMAC-SHA256>).
+      2xx — доставлено; иначе повторы 10 с → 2 ч; 410 выключает подписку.
+    parameters:
+      subscriptionUrl:
+        description: Адрес из подписки /api/v1/restaurants/{r}/webhooks.
+    messages:
+      webhook:
+        $ref: '#/components/messages/RestaurantWebhook'
+
+operations:
+  publishOrderEvents:
+    action: send
+    channel:
+      $ref: '#/channels/orderEvents'
+    summary: order-service публикует смену статуса (outbox).
+  consumeOrderEvents:
+    action: receive
+    channel:
+      $ref: '#/channels/orderEvents'
+    summary: notification-service (уведомления и вебхуки — разные группы), insights-service.
+  sendPaymentCommands:
+    action: send
+    channel:
+      $ref: '#/channels/paymentCommands'
+    summary: order-service (сага) просит списать или вернуть.
+  receivePaymentEvents:
+    action: receive
+    channel:
+      $ref: '#/channels/paymentEvents'
+    summary: order-service получает исход платежа.
+  publishAudit:
+    action: send
+    channel:
+      $ref: '#/channels/auditEvents'
+    summary: сервисы отправляют записи журнала аудита; читает insights-service.
+  captureCustomerOrder:
+    action: send
+    channel:
+      $ref: '#/channels/cdcCustomerOrder'
+    summary: Debezium публикует изменения строк заказа.
+  captureDelivery:
+    action: send
+    channel:
+      $ref: '#/channels/cdcDelivery'
+    summary: Debezium публикует изменения строк доставки.
+  dispatchNotifications:
+    action: send
+    channel:
+      $ref: '#/channels/notificationTasks'
+  nudgeLongPolls:
+    action: send
+    channel:
+      $ref: '#/channels/notificationsLive'
+  dispatchWebhooks:
+    action: send
+    channel:
+      $ref: '#/channels/webhookDeliveries'
+  publishCourierPosition:
+    action: send
+    channel:
+      $ref: '#/channels/courierPosition'
+    summary: устройство курьера.
+  receiveTrack:
+    action: receive
+    channel:
+      $ref: '#/channels/orderTrack'
+    summary: браузер клиента.
+  receiveChat:
+    action: receive
+    channel:
+      $ref: '#/channels/orderChat'
+  sendChatSignal:
+    action: send
+    channel:
+      $ref: '#/channels/orderChatSignals'
+  deliverWebhook:
+    action: send
+    channel:
+      $ref: '#/channels/restaurantWebhook'
+    summary: notification-service → система ресторана.
+
+components:
+  messages:
+    OrderIntegrationEvent:
+      name: OrderIntegrationEvent
+      headers:
+        $ref: '#/components/schemas/KafkaHeaders'
+      payload:
+        $ref: '#/components/schemas/OrderIntegrationEvent'
+    PaymentCommand:
+      name: PaymentCommand
+      headers:
+        $ref: '#/components/schemas/KafkaHeaders'
+      payload:
+        type: object
+        required: [commandId, schemaVersion, commandType, orderId]
+        properties:
+          commandId: { type: string, format: uuid }
+          schemaVersion: { type: integer, const: 1 }
+          commandType: { type: string, enum: [PAYMENT_REQUESTED, REFUND_REQUESTED] }
+          orderId: { type: integer, format: int64 }
+          customerId: { type: integer, format: int64 }
+          amount: { type: number }
+          method: { type: string, enum: [CARD, CASH_ON_DELIVERY] }
+          idempotencyKey: { type: string }
+          occurredAt: { type: string, format: date-time }
+    PaymentEvent:
+      name: PaymentEvent
+      headers:
+        $ref: '#/components/schemas/KafkaHeaders'
+      payload:
+        type: object
+        required: [eventId, schemaVersion, eventType, orderId]
+        properties:
+          eventId: { type: string, format: uuid }
+          schemaVersion: { type: integer, const: 1 }
+          eventType: { type: string, enum: [PAYMENT_SUCCEEDED, PAYMENT_FAILED, PAYMENT_REFUNDED] }
+          orderId: { type: integer, format: int64 }
+          paymentId: { type: integer, format: int64 }
+          customerId: { type: integer, format: int64 }
+          amount: { type: number }
+          method: { type: string }
+          failureReason: { type: [string, 'null'] }
+          occurredAt: { type: string, format: date-time }
+    AuditEvent:
+      name: AuditEvent
+      payload:
+        type: object
+        required: [eventId, schemaVersion, sourceService, action, occurredAt]
+        properties:
+          eventId: { type: string, format: uuid }
+          schemaVersion: { type: integer, const: 1 }
+          sourceService: { type: string }
+          sourceId: { type: integer, format: int64 }
+          actorId: { type: [integer, 'null'], format: int64 }
+          actorEmail: { type: [string, 'null'] }
+          action: { type: string }
+          resourceType: { type: string }
+          resourceId: { type: string }
+          outcome: { type: string }
+          details: { type: [string, 'null'] }
+          correlationId: { type: [string, 'null'] }
+          occurredAt: { type: string, format: date-time }
+    CdcCustomerOrderRow:
+      name: CdcCustomerOrderRow
+      payload:
+        type: object
+        properties:
+          id: { type: integer, format: int64 }
+          customer_id: { type: integer, format: int64 }
+          restaurant_id: { type: integer, format: int64 }
+          status: { type: string }
+          total_amount: { type: string, description: 'decimal.handling.mode=string' }
+          created_at: { type: string }
+          updated_at: { type: string }
+          __op: { type: string, enum: [c, u, d, r] }
+          __source_ts_ms: { type: integer, format: int64 }
+          __deleted: { type: string, enum: ['true', 'false'] }
+    CdcDeliveryRow:
+      name: CdcDeliveryRow
+      payload:
+        type: object
+        properties:
+          id: { type: integer, format: int64 }
+          order_id: { type: integer, format: int64 }
+          courier_id: { type: [integer, 'null'], format: int64 }
+          status: { type: string }
+          delivered_at: { type: [string, 'null'] }
+          __op: { type: string, enum: [c, u, d, r] }
+          __source_ts_ms: { type: integer, format: int64 }
+    IdTask:
+      name: IdTask
+      contentType: text/plain
+      summary: Тело — только идентификатор записи в базе; всё остальное обработчик читает сам («сигнал + чтение»).
+      payload:
+        type: string
+        pattern: '^[0-9]+$'
+    RecipientNudge:
+      name: RecipientNudge
+      contentType: text/plain
+      payload:
+        type: string
+        pattern: '^[0-9]+$'
+        description: id получателя
+    CourierPosition:
+      name: CourierPosition
+      payload:
+        type: object
+        required: [latitude, longitude]
+        properties:
+          latitude: { type: number, minimum: -90, maximum: 90 }
+          longitude: { type: number, minimum: -180, maximum: 180 }
+          speedKmh: { type: [number, 'null'] }
+    TrackPoint:
+      name: TrackPoint
+      payload:
+        type: object
+        properties:
+          deliveryId: { type: integer, format: int64 }
+          latitude: { type: number }
+          longitude: { type: number }
+          speedKmh: { type: [number, 'null'] }
+          recordedAt: { type: string, format: date-time }
+    ChatEvent:
+      name: ChatEvent
+      payload:
+        type: object
+        required: [type, orderId]
+        properties:
+          type: { type: string, enum: [MESSAGE, TYPING, READ] }
+          orderId: { type: integer, format: int64 }
+          messageId: { type: [string, 'null'], format: uuid }
+          senderId: { type: integer, format: int64 }
+          senderRole: { type: string, enum: [CUSTOMER, COURIER, SUPPORT] }
+          text: { type: [string, 'null'], maxLength: 1000 }
+          sentAt: { type: string, format: date-time }
+          clientMessageId: { type: [string, 'null'], format: uuid }
+          upTo: { type: [string, 'null'], format: uuid }
+    ChatSignal:
+      name: ChatSignal
+      payload:
+        type: object
+        properties:
+          upTo: { type: string, format: uuid, description: 'только для read' }
+    RestaurantWebhook:
+      name: RestaurantWebhook
+      headers:
+        type: object
+        required: [webhook-id, webhook-timestamp, webhook-signature]
+        properties:
+          webhook-id: { type: string, format: uuid }
+          webhook-timestamp: { type: string, pattern: '^[0-9]+$' }
+          webhook-signature: { type: string, pattern: '^v1,[A-Za-z0-9+/=]+( v1,[A-Za-z0-9+/=]+)*$' }
+      payload:
+        type: object
+        required: [type, timestamp, data]
+        properties:
+          type:
+            type: string
+            enum: [order.created, order.payment_pending, order.paid, order.accepted, order.cooking,
+                   order.ready_for_delivery, order.in_delivery, order.delivered, order.canceled, webhook.test]
+          timestamp: { type: string, format: date-time }
+          data:
+            type: object
+            properties:
+              orderId: { type: integer, format: int64 }
+              restaurantId: { type: integer, format: int64 }
+              status: { type: string }
+              previousStatus: { type: [string, 'null'] }
+              totalAmount: { type: number }
+
+  schemas:
+    KafkaHeaders:
+      type: object
+      properties:
+        X-Correlation-Id: { type: string, description: 'сквозная метка запроса' }
+        traceparent: { type: string, description: 'W3C Trace Context — трасса продолжается через Kafka' }
+    OrderIntegrationEvent:
+      type: object
+      required: [eventId, schemaVersion, eventType, orderId, newStatus, occurredAt]
+      properties:
+        eventId: { type: string, format: uuid, description: 'ключ идемпотентности потребителей' }
+        schemaVersion: { type: integer, const: 1 }
+        eventType: { type: string, examples: [ORDER_PAID] }
+        orderId: { type: integer, format: int64 }
+        customerId: { type: integer, format: int64 }
+        restaurantId: { type: integer, format: int64 }
+        previousStatus: { type: [string, 'null'] }
+        newStatus:
+          type: string
+          description: 'строкой, а не enum: новый статус не должен ломать старых потребителей'
+        totalAmount: { type: number }
+        occurredAt: { type: string, format: date-time }
